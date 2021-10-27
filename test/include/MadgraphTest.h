@@ -22,55 +22,7 @@ struct ReferenceData {
   std::vector<double> MEs;
 };
 
-/// Read batches of reference data from a file and store them in a map.
-std::map<unsigned int, ReferenceData> readReferenceData(const std::string& refFileName)
-{
-  std::ifstream referenceFile(refFileName.c_str());
-  EXPECT_TRUE(referenceFile.is_open()) << refFileName;
-  std::map<unsigned int, ReferenceData> referenceData;
-  unsigned int evtNo;
-  unsigned int batchNo;
-
-  for (std::string line; std::getline(referenceFile, line); )
-  {
-    std::stringstream lineStr(line);
-    if (line.empty() || line[0] == '#')
-    {
-      continue;
-    }
-    else if (line.find("Event") != std::string::npos)
-    {
-      std::string dummy;
-      lineStr >> dummy >> evtNo >> dummy >> batchNo;
-    }
-    else if (line.find("ME") != std::string::npos)
-    {
-      if (evtNo <= referenceData[batchNo].MEs.size())
-        referenceData[batchNo].MEs.resize(evtNo + 1);
-
-      std::string dummy;
-      lineStr >> dummy >> referenceData[batchNo].MEs[evtNo];
-    }
-    else
-    {
-      unsigned int particleIndex;
-      lineStr >> particleIndex;
-
-      if (evtNo <= referenceData[batchNo].momenta.size())
-        referenceData[batchNo].momenta.resize(evtNo + 1);
-      if (particleIndex <= referenceData[batchNo].momenta[evtNo].size())
-        referenceData[batchNo].momenta[evtNo].resize(particleIndex + 1);
-
-      auto& fourVec = referenceData[batchNo].momenta[evtNo][particleIndex];
-      for (unsigned int i=0; i < fourVec.size(); ++i) {
-        EXPECT_TRUE(lineStr.good());
-        lineStr >> fourVec[i];
-      }
-      EXPECT_TRUE(lineStr.eof());
-    }
-  }
-  return referenceData;
-}
+std::map<unsigned int, ReferenceData> readReferenceData(const std::string& refFileName);
 
 }
 
@@ -163,7 +115,6 @@ public:
   }
 };
 
-
 /**
  * Test class that's defining all tests to run with a Madgraph workflow.
  * The tests are defined below using TEST_P.
@@ -184,7 +135,64 @@ protected:
   { }
 };
 
+#ifndef __CUDACC__
+namespace MadgraphTestInternal {
 
+/// Read batches of reference data from a file and store them in a map.
+std::map<unsigned int, ReferenceData> readReferenceData(const std::string& refFileName)
+{
+  std::ifstream referenceFile(refFileName.c_str());
+  EXPECT_TRUE(referenceFile.is_open()) << refFileName;
+  std::map<unsigned int, ReferenceData> referenceData;
+  unsigned int evtNo;
+  unsigned int batchNo;
+
+  for (std::string line; std::getline(referenceFile, line); )
+  {
+    std::stringstream lineStr(line);
+    if (line.empty() || line[0] == '#')
+    {
+      continue;
+    }
+    else if (line.find("Event") != std::string::npos)
+    {
+      std::string dummy;
+      lineStr >> dummy >> evtNo >> dummy >> batchNo;
+    }
+    else if (line.find("ME") != std::string::npos)
+    {
+      if (evtNo <= referenceData[batchNo].MEs.size())
+        referenceData[batchNo].MEs.resize(evtNo + 1);
+
+      std::string dummy;
+      lineStr >> dummy >> referenceData[batchNo].MEs[evtNo];
+    }
+    else
+    {
+      unsigned int particleIndex;
+      lineStr >> particleIndex;
+
+      if (evtNo <= referenceData[batchNo].momenta.size())
+        referenceData[batchNo].momenta.resize(evtNo + 1);
+      if (particleIndex <= referenceData[batchNo].momenta[evtNo].size())
+        referenceData[batchNo].momenta[evtNo].resize(particleIndex + 1);
+
+      auto& fourVec = referenceData[batchNo].momenta[evtNo][particleIndex];
+      for (unsigned int i=0; i < fourVec.size(); ++i) {
+        EXPECT_TRUE(lineStr.good());
+        lineStr >> fourVec[i];
+      }
+      EXPECT_TRUE(lineStr.eof());
+    }
+  }
+  return referenceData;
+}
+
+}
+
+/// Compare momenta and matrix elements.
+/// This uses an implementation of TestDriverBase to run a madgraph workflow,
+/// and compares momenta and matrix elements with a reference file.
 TEST_P(MadgraphTest, CompareMomentaAndME)
 {
   using namespace MadgraphTestInternal;
@@ -292,5 +300,7 @@ TEST_P(MadgraphTest, CompareMomentaAndME)
     std::cout << "Event dump written to " << dumpFileName << std::endl;
   }
 }
+
+#endif // __CUDACC__
 
 #endif /* MADGRAPHTEST_H_ */
