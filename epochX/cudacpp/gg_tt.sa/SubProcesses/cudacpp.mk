@@ -79,21 +79,15 @@ endif
 ifneq ($(wildcard $(CUDA_HOME)/bin/nvcc),)
   NVCC = $(CUDA_HOME)/bin/nvcc
   USE_NVTX ?=-DUSE_NVTX
-  # Default: build for V100 (compute capability 70): e.g. CERN (lxbatch, itscrd) and Juwels (Cluster)
   # See https://developer.nvidia.com/cuda-gpus#compute (other examples: Jetson Nano Maxwell has compute capability 35)
   # See https://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/
-  CUARCHFLAGS = -gencode arch=compute_70,code=compute_70
-  CUARCHFLAGS += -gencode arch=compute_70,code=sm_70
-  # (FIXME?) At Juwels: build only for A100 (compute capability 80) for Juwels (Booster)
-  # See https://docs.nvidia.com/cuda/ampere-compatibility-guide/index.html#building-applications-with-ampere-support
-  ifneq ($(shell hostname | grep juwels),)
-    CUARCHFLAGS = -gencode arch=compute_80,code=compute_80 # Use += to build both 70 and 80 (e.g. Juwels Cluster and Booster)
-    CUARCHFLAGS += -gencode arch=compute_80,code=sm_80
-  endif
+  # Default: build for V100 (compute capability 70): e.g. CERN (lxbatch, itscrd) and Juwels (Cluster)
+  # Embed device code for 70, and PTX for 70+
+  MADGRAPH_CUARCHFLAGS ?= --gpu-architecture=compute_70 --gpu-code=sm_70,compute_70
   CUINC       = -I$(CUDA_HOME)/include/
   CULIBFLAGS  = -L$(CUDA_HOME)/lib64/ -lcurand # NB: -lcuda is not needed here!
   CUOPTFLAGS  = -lineinfo
-  CUFLAGS     = $(OPTFLAGS) $(CUOPTFLAGS) $(INCFLAGS) $(CUINC) $(USE_NVTX) $(CUARCHFLAGS) -lcurand
+  CUFLAGS     = $(OPTFLAGS) $(CUOPTFLAGS) $(INCFLAGS) $(CUINC) $(USE_NVTX) $(MADGRAPH_CUARCHFLAGS) -lcurand
   ###CUFLAGS    += -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wshadow
   ###NVCC_VERSION = $(shell $(NVCC) --version | grep 'Cuda compilation tools' | cut -d' ' -f5 | cut -d, -f1)
   CUFLAGS += -std=c++17 # need CUDA >= 11.2 (see #333): this is enforced in mgOnGpuConfig.h
@@ -476,7 +470,7 @@ $(cu_main): LIBFLAGS += -lsvml # compile with icpx and link with nvcc (undefined
 endif
 $(cu_main): LIBFLAGS += $(CULIBFLAGSRPATH) # avoid the need for LD_LIBRARY_PATH
 $(cu_main): $(BUILDDIR)/gcheck_sa.o $(LIBDIR)/lib$(MG5AMC_CULIB).so $(cu_objects_exe)
-	$(NVCC) -o $@ $(BUILDDIR)/gcheck_sa.o $(CUARCHFLAGS) $(LIBFLAGS) -L$(LIBDIR) -l$(MG5AMC_CULIB) $(cu_objects_exe) $(CULIBFLAGS)
+	$(NVCC) -o $@ $(BUILDDIR)/gcheck_sa.o $(MADGRAPH_CUARCHFLAGS) $(LIBFLAGS) -L$(LIBDIR) -l$(MG5AMC_CULIB) $(cu_objects_exe) $(CULIBFLAGS)
 endif
 
 #-------------------------------------------------------------------------------
