@@ -1,29 +1,140 @@
-# Copyright (C) 2020-2024 CERN and UCLouvain.
+# Copyright (C) 2024 CERN and UCLouvain.
 # Licensed under the GNU Lesser General Public License (version 3 or later).
-# Created by: S. Roiser (Feb 2022) for the MG5aMC CUDACPP plugin.
-# Further modified by: S. Roiser (2022-2024) for the MG5aMC CUDACPP plugin.
+# Created by: S. Hageboeck for the MG5aMC CUDACPP plugin.
+# This template is supposed to be used from the SubProcesses/P* directories
 
-get_filename_component(basename ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-string(TOLOWER ${basename} targadd)
+get_filename_component(PROCESS ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+set(libname_cxx mg5amc_cxx_${PROCESS})
+set(libname_f mg5amc_f_${PROCESS})
 
-file(GLOB_RECURSE HEADERS "../*.h" CPPProcess.h)
-set(SOURCES ../BridgeKernels.cc CPPProcess.cc ../CrossSectionKernels.cc
-            ../MatrixElementKernels.cc ../RamboSamplingKernels.cc
-            ../RandomNumberKernels.cc)
+# List files that can be compiled either as C++ or Cuda
+set(CXX_AND_CUDA_FILES
+  BridgeKernels.cc
+  CommonRandomNumberKernel.cc
+  counters.cc
+  CPPProcess.cc
+  CrossSectionKernels.cc
+  MatrixElementKernels.cc
+  RamboSamplingKernels.cc
+  fbridge.cc
+  fsampler.cc
+)
 
-set(libname mg5amc_cxx_${targadd})
-add_library(${libname} ${SOURCES} ${HEADERS})
-target_include_directories(${libname} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
-                                             "${PROJECT_SOURCE_DIR}/src"
-                                             "${PROJECT_GITROOT_DIR}/tools")
+######################################################
+# Common library for this process:
+######################################################
+add_library(${libname_cxx} OBJECT ${CXX_AND_CUDA_FILES})
+target_include_directories(${libname_cxx} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(${libname_cxx} PUBLIC mg5amc_common)
 
-set(execname check_${targadd}.exe)
+if(TARGET CUDA::curand)
+  target_sources(${libname_cxx} PRIVATE CurandRandomNumberKernel.cc)
+  target_link_libraries(${libname_cxx} PUBLIC CUDA::curand)
+  list(APPEND CXX_AND_CUDA_FILES CurandRandomNumberKernel.cc)
+else()
+  target_compile_definitions(${libname_cxx} PUBLIC MGONGPU_HAS_NO_CURAND)
+endif()
+
+if(HIP_FOUND)
+  message(WARNING "Trying to configure HIP random numbers (untested):")
+  target_sources(${libname_cxx} PRIVATE HiprandRandomNumberKernel.cc)
+  target_link_libraries(${libname_cxx} PUBLIC hip::hiprand)
+else()
+  target_compile_definitions(${libname_cxx} PUBLIC MGONGPU_HAS_NO_HIPRAND)
+endif()
+
+
+######################################################
+# Check executable:
+######################################################
+set(execname ${PROCESS}_check.exe)
 add_executable(${execname} check_sa.cc)
-target_link_libraries(${execname} PUBLIC mg5amc_common ${libname})
-target_include_directories(${execname} PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(${execname} PUBLIC ${libname_cxx})
+set_property(TARGET ${execname} PROPERTY OUTPUT_NAME check.exe)
 
-# some XCode specific stuff to make the executable run
-set_property(TARGET ${libname} PROPERTY XCODE_GENERATE_SCHEME TRUE)
-set_property(TARGET ${execname} PROPERTY XCODE_GENERATE_SCHEME TRUE)
-set_property(TARGET ${execname} PROPERTY XCODE_SCHEME_ARGUMENTS "--bridge" "8" "8" "32")
-set_property(TARGET ${execname} PROPERTY XCODE_SCHEME_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+# Change C++ compilation into CUDA compilation:
+if(DEFINED MG_ENABLE_LANGUAGE)
+  set_source_files_properties(${CXX_AND_CUDA_FILES} PROPERTIES LANGUAGE ${MG_ENABLE_LANGUAGE})
+  set_source_files_properties(check_sa.cc PROPERTIES LANGUAGE ${MG_ENABLE_LANGUAGE})
+endif()
+
+######################################################
+# Madevent:
+######################################################
+set(CMAKE_Fortran_PREPROCESS On)
+
+add_library(${libname_f} OBJECT
+  addmothers.f
+  # auto_dsig1.f
+  auto_dsig.f
+  cluster.f
+  cuts.f
+  dummy_fct.f
+  genps.f
+  get_color.f
+  idenparts.f
+  initcluster.f
+  myamp.f
+  unwgt.f
+  reweight.f
+  setcuts.f
+  setscales.f
+  ompnumthreads.cc
+  matrix1.f
+#  symmetry.f
+)
+target_include_directories(${libname_f} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(${libname_f} PUBLIC Source)
+
+
+# Madevent
+set(execname ${PROCESS}_madevent_fortran.exe)
+add_executable(${execname} auto_dsig1.f driver.f)
+target_link_libraries(${execname} PUBLIC ${libname_f} ${libname_cxx})
+set_property(TARGET ${execname} PROPERTY OUTPUT_NAME madevent_fortran)
+
+set(execname ${PROCESS}_madevent_cxx.exe)
+add_executable(${execname} auto_dsig1.f driver.f)
+target_link_libraries(${execname} PUBLIC ${libname_f} ${libname_cxx})
+set_property(TARGET ${execname} PROPERTY OUTPUT_NAME madevent_cpp)
+target_compile_definitions(${execname} PUBLIC MG5AMC_MEEXPORTER_CUDACPP)
+
+
+######################################################
+# Tests:
+######################################################
+if(BUILD_TESTING)
+  set(execname ${PROCESS}_runTest.exe)
+  add_executable(${execname} runTest.cc)
+  target_link_libraries(${execname} PUBLIC ${libname_cxx} GTest::gtest GTest::gtest_main)
+  set_property(TARGET ${execname} PROPERTY OUTPUT_NAME runTest.exe)
+  add_test(NAME ${execname}
+          COMMAND $<TARGET_FILE:${execname}>
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+  set(execname ${PROCESS}_testxxx.exe)
+  add_executable(${execname} testxxx.cc)
+  target_link_libraries(${execname} PUBLIC ${libname_cxx} GTest::gtest GTest::gtest_main)
+  set_property(TARGET ${execname} PROPERTY OUTPUT_NAME testxxx.exe)
+  add_test(NAME ${execname}
+          COMMAND $<TARGET_FILE:${execname}>
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+  if(DEFINED MG_ENABLE_LANGUAGE)
+    set_source_files_properties(runTest.cc testxxx.cc PROPERTIES LANGUAGE ${MG_ENABLE_LANGUAGE})
+  endif()
+
+  file(WRITE ${CMAKE_BINARY_DIR}/input.app
+  "16384 2 2
+  0.1
+  0
+  0
+  0
+  1
+  ")
+  add_test(NAME ${PROCESS}_madevent_cxx
+          COMMAND bash -c "$<TARGET_FILE:${PROCESS}_madevent_cxx.exe> < ${CMAKE_BINARY_DIR}/input.app")
+  add_test(NAME ${PROCESS}_madevent_fortran
+          COMMAND bash -c "$<TARGET_FILE:${PROCESS}_madevent_fortran.exe> < ${CMAKE_BINARY_DIR}/input.app")
+
+endif()

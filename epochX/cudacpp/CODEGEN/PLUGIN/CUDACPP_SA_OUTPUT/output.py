@@ -88,7 +88,8 @@ class PLUGIN_ProcessExporter(PLUGIN_export_cpp.ProcessExporterGPU):
     s = PLUGINDIR + '/madgraph/iolibs/template_files/'
     from_template = {'.': [s+'.clang-format', s+'CMake/CMakeLists.txt',
                            s+'COPYRIGHT', s+'COPYING', s+'COPYING.LESSER' ],
-                     'CMake': [s+'CMake/Compilers.txt', s+'CMake/Platforms.txt', s+'CMake/Macros.txt'],
+                     'Source': [s+'CMake/Source/CMakeLists.txt'],
+                     'CMake': [s+'CMake/Compilers.cmake', s+'CMake/ConfigureBackends.cmake', s+'CMake/Platforms.txt', s+'CMake/Macros.txt'],
                      'src': [s+'gpu/rambo.h', s+'read_slha.h', s+'read_slha.cc',
                              s+'gpu/mgOnGpuFptypes.h', s+'gpu/mgOnGpuCxtypes.h', s+'gpu/mgOnGpuVectors.h',
                              s+'gpu/constexpr_math.h',
@@ -295,16 +296,16 @@ class PLUGIN_ProcessExporter_MadEvent(PLUGIN_ProcessExporter):
     from_template['SubProcesses'] = from_template['SubProcesses'] + [s+'gpu/fbridge_common.inc',
                                       s+'gpu/counters.cc',
                                       s+'gpu/ompnumthreads.cc']
-     
-    to_link_in_P = PLUGIN_ProcessExporter.to_link_in_P + ['fbridge_common.inc', 'counters.cc','ompnumthreads.cc'] 
+
+    to_link_in_P = PLUGIN_ProcessExporter.to_link_in_P + ['fbridge_common.inc', 'counters.cc','ompnumthreads.cc']
 
 #------------------------------------------------------------------------------------
 
 class SIMD_ProcessExporter(PLUGIN_ProcessExporter_MadEvent):
-    
+
     # Default class for the run_card to use
     run_card_class = launch_plugin.CPPRunCard
-    
+
     def change_output_args(args, cmd):
         """ """
         cmd._export_format = "madevent"
@@ -320,7 +321,7 @@ class GPU_ProcessExporter(PLUGIN_ProcessExporter_MadEvent):
 
     # Default class for the run_card to use
     run_card_class = launch_plugin.GPURunCard
-    
+
     def change_output_args(args, cmd):
         """ """
         cmd._export_format = "madevent"

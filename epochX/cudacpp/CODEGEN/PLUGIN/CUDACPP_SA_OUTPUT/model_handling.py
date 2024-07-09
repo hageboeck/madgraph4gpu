@@ -4,6 +4,7 @@
 # Further modified by: O. Mattelaer, J. Teig, A. Valassi (2021-2024) for the MG5aMC CUDACPP plugin.
 
 import os
+import shutil
 
 # AV - use templates for source code, scripts and Makefiles from PLUGINDIR instead of MG5DIR
 ###from madgraph import MG5DIR
@@ -1455,12 +1456,10 @@ class PLUGIN_OneProcessExporter(PLUGIN_export_cpp.OneProcessExporterGPU):
 
     # SR - generate CMakeLists.txt file inside the P* directory
     def edit_CMakeLists(self):
-        """Generate CMakeLists.txt"""
-        ###misc.sprint('Entering PLUGIN_OneProcessExporter.edit_CMakeLists')
-        template = open(pjoin(self.template_path,'CMake/SubProcesses/CMakeLists_P.txt'),'r').read()
-        ff = open(pjoin(self.path, 'CMakeLists.txt'),'w')
-        ff.write(template)
-        ff.close()
+        """Generate CMakeLists.txt for the P* directories"""
+        file_in = pjoin(self.template_path,'CMake/SubProcesses/CMakeLists_P.txt')
+        file_out = pjoin(self.path, 'CMakeLists.txt')
+        shutil.copyfile(file_in, file_out)
 
     # AV - replace the export_cpp.OneProcessExporterGPU method (invert .cc/.cu, add debug printouts)
     def edit_check_sa(self):

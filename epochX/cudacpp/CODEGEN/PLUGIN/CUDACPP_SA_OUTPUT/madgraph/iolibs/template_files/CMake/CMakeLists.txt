@@ -1,19 +1,48 @@
-# Copyright (C) 2020-2024 CERN and UCLouvain.
+# Copyright (C) 2024 CERN and UCLouvain.
 # Licensed under the GNU Lesser General Public License (version 3 or later).
-# Created by: S. Roiser (Feb 2022) for the MG5aMC CUDACPP plugin.
-# Further modified by: S. Roiser (2022-2024) for the MG5aMC CUDACPP plugin.
+# Created by: S. Hageboeck for the MG5aMC CUDACPP plugin.
 
-# Minimal CMake configuration to build a functional CPU version
+cmake_minimum_required(VERSION 3.20)
 
-cmake_minimum_required(VERSION 3.22)
+get_filename_component(PROCESS ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+project(${PROCESS}
+  LANGUAGES Fortran CXX)
 
-project(Madgraph4GPU)
+#######################################################
+# Options to configure from the user side
+#######################################################
+option(MG_FAST_MATH "Use fast math for C++ and fortran" ON)
+option(MG_TESTING "Build tests using CTest and Googletest" OFF)
+option(MG_CURAND "Enable cuRAND support (CUDA toolkit needs to be installed)" OFF)
+option(MG_HIPRAND "Enable hipRAND support (hip needs to be installed)" OFF)
+option(MG_ASAN "Enable address sanitizer in C++ builds" OFF)
+option(MG_UBSAN "Enable undefined behaviour sanitizer in C++ builds" OFF)
+option(MG_CLANG_TIDY "Enable clang-tidy checks for C++ builds" OFF)
+set(MG_BACKEND "native" CACHE STRING "The backend to be used to compute matrix elements.")
+set(MG_FPTYPE "m" CACHE STRING "Floating-point type to be used: d (double), m (mixed), f (float)")
 
-include(${PROJECT_SOURCE_DIR}/CMake/Platforms.txt)
-include(${PROJECT_SOURCE_DIR}/CMake/Compilers.txt)
-include(${PROJECT_SOURCE_DIR}/CMake/Macros.txt)
+#######################################################
+# Configure (build-type-agnostic) compiler flags
+#######################################################
+include(CMake/Compilers.cmake)
 
-set(PROJECT_GITROOT_DIR ${PROJECT_SOURCE_DIR}/../../..)
+#######################################################
+# Configure matrix-element backend
+#######################################################
+include(CMake/ConfigureBackends.cmake)
 
+#######################################################
+# Configure tests if enabled
+#######################################################
+if(MG_TESTING)
+  include(CTest)
+  find_package(GTest REQUIRED)
+endif()
+
+
+#######################################################
+# Add all directories to be compiled
+#######################################################
+add_subdirectory(Source)
 add_subdirectory(src)
 add_subdirectory(SubProcesses)
